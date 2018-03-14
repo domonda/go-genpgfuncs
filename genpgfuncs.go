@@ -3,9 +3,7 @@ package genpgfuncs
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/guregu/null"
@@ -47,7 +45,7 @@ func IntrospectFunction(db *sqlx.DB, name string) (f *Function, err error) {
 		kind        string
 		description null.String
 	)
-	err = db.QueryRowx(query, namespace, name).Scan(&arguments, &result, &kind, &description)
+	err = db.QueryRow(query, namespace, name).Scan(&arguments, &result, &kind, &description)
 	if err != nil {
 		return nil, err
 	}
@@ -71,104 +69,6 @@ func IntrospectFunction(db *sqlx.DB, name string) (f *Function, err error) {
 	}
 
 	return f, nil
-}
-
-type Imports map[string]struct{}
-
-func (imports Imports) Fprint(writer io.Writer) {
-	if len(imports) > 0 {
-		fmt.Fprint(writer, "import (\n")
-		for imp := range imports {
-			fmt.Fprintf(writer, "\"%s\"\n", imp)
-		}
-		fmt.Fprint(writer, ")\n")
-	}
-}
-
-type Enum struct {
-	Name   string
-	Values []string
-}
-
-func (enum *Enum) GoName() string {
-	name := enum.Name
-	p := strings.LastIndexByte(name, '.')
-	name = name[p+1:]
-	return dry.StringToUpperCamelCase(name)
-}
-
-func (enum *Enum) GoConstsAndValues() (constsAndValues []string) {
-	baseName := enum.GoName()
-	for _, enumValue := range enum.Values {
-		constName := baseName + dry.StringToUpperCamelCase(enumValue)
-		constsAndValues = append(constsAndValues, constName, enumValue)
-	}
-	return constsAndValues
-}
-
-func (enum *Enum) Fprint(writer io.Writer) {
-	fmt.Fprintf(writer, "type %s string\n", enum.GoName())
-	fmt.Fprint(writer, "const (\n")
-	constsAndValues := enum.GoConstsAndValues()
-	for i := 0; i < len(constsAndValues); i += 2 {
-		name := constsAndValues[i]
-		value := constsAndValues[i+1]
-		fmt.Fprintf(writer, "%s %s = \"%s\" \n", name, enum.GoName(), value)
-	}
-	fmt.Fprint(writer, ")\n")
-
-	fmt.Fprintf(writer, "func (c %s) Valid() bool {\n", enum.GoName())
-	fmt.Fprint(writer, "switch c {\n")
-	fmt.Fprint(writer, "case ")
-	for i := 0; i < len(constsAndValues); i += 2 {
-		name := constsAndValues[i]
-		if i > 0 {
-			fmt.Fprint(writer, ", ")
-		}
-		fmt.Fprint(writer, name)
-	}
-	fmt.Fprint(writer, ":\n")
-	fmt.Fprint(writer, "return true\n")
-	fmt.Fprint(writer, "}\n")
-	fmt.Fprint(writer, "return false\n")
-	fmt.Fprint(writer, "}\n")
-}
-
-type Enums map[string]Enum
-
-func (enums Enums) Fprint(writer io.Writer) {
-	sorted := make([]Enum, 0, len(enums))
-	for _, enum := range enums {
-		sorted = append(sorted, enum)
-	}
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Name < sorted[j].Name
-	})
-	for _, enum := range sorted {
-		enum.Fprint(writer)
-	}
-}
-
-type Function struct {
-	Namespace   string
-	Name        string
-	Kind        string
-	Arguments   []FunctionArgument
-	Result      string
-	Description string
-}
-
-type FunctionArgument struct {
-	Name string
-	Type string
-}
-
-func (arg *FunctionArgument) GoName() string {
-	return dry.StringToLowerCamelCase(arg.Name)
-}
-
-func (arg *FunctionArgument) GoType(db *sqlx.DB, imports Imports, enums Enums, typeMap map[string]string) string {
-	return PgToGoType(db, arg.Type, imports, enums, typeMap)
 }
 
 func GenerateNoResultFunctionsDBFirstArg(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
@@ -331,6 +231,8 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 	for _, funcDef := range functions {
 		goFuncName := dry.StringToUpperCamelCase(funcDef.Name)
 
+		fmt.Println(funcDef.Namespace+"."+funcDef.Name, "=>", packageName+"."+goFuncName)
+
 		if argsDef {
 			imports["github.com/ungerik/go-command"] = struct{}{}
 
@@ -470,137 +372,4 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 	fmt.Println("Generated file", sourceFile)
 
 	return nil
-}
-
-var pgToGoType = map[string]string{
-	"boolean":          "bool",
-	"text":             "string",
-	"varchar":          "string",
-	"float4":           "float32",
-	"real":             "float32",
-	"float8":           "float64",
-	"double precision": "float64",
-	"smallint":         "int16",
-	"int":              "int32",
-	"integer":          "int32",
-	"int4":             "int32",
-	"bigint":           "int64",
-	"int8":             "int64",
-	"smallserial":      "int16",
-	"serial":           "int32",
-	"bigserial":        "int64",
-	"date":             "time.Time",
-	"timestamp":        "time.Time",
-	"timestamptz":      "time.Time",
-	"bytea":            "[]byte",
-
-	"uuid": "uuid.UUID",
-}
-
-var typeImport = map[string]string{
-	"time.Time":    "time",
-	"uuid.UUID":    "github.com/ungerik/go-uuid",
-	"document.Doc": "github.com/domonda/Domonda/go/document",
-}
-
-func PgToGoType(db *sqlx.DB, t string, imports Imports, enums Enums, typeMap map[string]string) string {
-	slice := strings.HasSuffix(t, "[]")
-	if slice {
-		t = strings.TrimSuffix(t, "[]")
-	} else if slice = strings.HasPrefix(t, "SETOF "); slice {
-		t = strings.TrimPrefix(t, "SETOF ")
-	}
-
-	if goType, ok := typeMap[t]; ok {
-		derefType := strings.TrimPrefix(goType, "*")
-		if imp, hasImport := typeImport[derefType]; hasImport {
-			imports[imp] = struct{}{}
-		}
-		if slice {
-			goType = "[]" + goType
-		}
-		return goType
-	}
-
-	if goType, ok := pgToGoType[t]; ok {
-		if imp, hasImport := typeImport[goType]; hasImport {
-			imports[imp] = struct{}{}
-		}
-		if slice {
-			goType = "[]" + goType
-		}
-		return goType
-	}
-
-	values, _ := GetEnumValues(db, t)
-	if len(values) > 0 {
-		enum := Enum{
-			Name:   t,
-			Values: values,
-		}
-		enums[t] = enum
-		goType := enum.GoName()
-		if slice {
-			goType = "[]" + goType
-		}
-		return goType
-	}
-
-	if slice {
-		t = "[]" + t
-	}
-	return t
-}
-
-func GetEnumValues(db *sqlx.DB, enum string) (values []string, err error) {
-	const query = `
-		SELECT e.enumlabel
-			FROM pg_enum AS e
-			JOIN pg_type t ON e.enumtypid = t.oid
-			WHERE t.typname = $1`
-
-	rows, err := db.Query(query, enum)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var value string
-		err = rows.Scan(&value)
-		if err != nil {
-			return nil, err
-		}
-		values = append(values, value)
-	}
-	if rows.Err() != nil {
-		return nil, rows.Err()
-	}
-	return values, nil
-}
-
-var zeroValuesForType = map[string]string{
-	"bool":      "false",
-	"string":    `""`,
-	"float32":   "0",
-	"float64":   "0",
-	"int":       "0",
-	"int16":     "0",
-	"int32":     "0",
-	"int64":     "0",
-	"uint":      "0",
-	"uint16":    "0",
-	"uint32":    "0",
-	"uint64":    "0",
-	"time.Time": "time.Time{}",
-	"uuid.UUID": "uuid.Nil",
-}
-
-func goZeroValueForType(t string) string {
-	if strings.HasPrefix(t, "[]") || strings.HasPrefix(t, "*") {
-		return "nil"
-	}
-	if z, ok := zeroValuesForType[t]; ok {
-		return z
-	}
-	return "" // t + "{}"
 }

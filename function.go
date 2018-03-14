@@ -1,0 +1,28 @@
+package genpgfuncs
+
+import (
+	"github.com/jmoiron/sqlx"
+	dry "github.com/ungerik/go-dry"
+)
+
+type Function struct {
+	Namespace   string
+	Name        string
+	Kind        string
+	Arguments   []FunctionArgument
+	Result      string
+	Description string
+}
+
+type FunctionArgument struct {
+	Name string
+	Type string
+}
+
+func (arg *FunctionArgument) GoName() string {
+	return dry.StringToLowerCamelCase(arg.Name)
+}
+
+func (arg *FunctionArgument) GoType(db *sqlx.DB, imports Imports, enums Enums, typeMap map[string]string) string {
+	return PgToGoType(db, arg.Type, imports, enums, typeMap)
+}
