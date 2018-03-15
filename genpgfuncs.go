@@ -71,150 +71,6 @@ func IntrospectFunction(db *sqlx.DB, name string) (f *Function, err error) {
 	return f, nil
 }
 
-func GenerateNoResultFunctionsDBFirstArg(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
-	buf := bytes.NewBuffer(nil)
-	imports := make(Imports)
-	enums := make(Enums)
-
-	for _, funcDef := range functions {
-		imports["github.com/jmoiron/sqlx"] = struct{}{}
-
-		fmt.Fprintf(buf, "func %s(db *sqlx.DB", dry.StringToUpperCamelCase(funcDef.Name))
-		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(db, arg.Type, imports, enums, typeMap))
-		}
-		fmt.Fprint(buf, ") error {\n")
-
-		fmt.Fprintf(buf, "_, err := db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
-		for i := range funcDef.Arguments {
-			if i > 0 {
-				fmt.Fprint(buf, ", ")
-			}
-			fmt.Fprintf(buf, "$%d", i+1)
-		}
-		fmt.Fprint(buf, ")\"")
-		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s", dry.StringToLowerCamelCase(arg.Name))
-		}
-		fmt.Fprint(buf, ")\n")
-		fmt.Fprint(buf, "return err\n")
-		fmt.Fprint(buf, "}\n\n")
-	}
-
-	file, err := fs.CleanFilePath(sourceFile).OpenWriter()
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintf(file, "package %s\n\n", packageName)
-	imports.Fprint(file)
-	enums.Fprint(file)
-
-	_, err = file.Write(buf.Bytes())
-	if err != nil {
-		file.Close()
-		return err
-	}
-	err = file.Close()
-	if err != nil {
-		return err
-	}
-
-	output, err := exec.Command("go", "fmt", sourceFile).CombinedOutput()
-	if err != nil {
-		fmt.Println(output)
-		return err
-	}
-
-	fmt.Println("Generated file", sourceFile)
-
-	return nil
-}
-
-func GenerateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
-	functions := make([]*Function, len(functionNames))
-	for i, name := range functionNames {
-		functions[i], err = IntrospectFunction(db, name)
-		if err != nil {
-			return err
-		}
-	}
-	return generateNoResultFunctions(db, sourceFile, packageName, typeMap, argsDef, functions...)
-}
-
-func generateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
-	buf := bytes.NewBuffer(nil)
-	imports := make(Imports)
-	enums := make(Enums)
-
-	for _, funcDef := range functions {
-		if argsDef {
-			imports["github.com/ungerik/go-command"] = struct{}{}
-
-			fmt.Fprintf(buf, "var %s struct {\ncommand.ArgsDef\n\n", dry.StringToUpperCamelCase(funcDef.Name)+"Args")
-			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(db, imports, enums, typeMap), arg.GoName())
-			}
-			fmt.Fprint(buf, "}\n\n")
-		}
-
-		fmt.Fprintf(buf, "func %s(", dry.StringToUpperCamelCase(funcDef.Name))
-		for i, arg := range funcDef.Arguments {
-			if i > 0 {
-				fmt.Fprintf(buf, ", ")
-			}
-			fmt.Fprintf(buf, "%s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(db, arg.Type, imports, enums, typeMap))
-		}
-		fmt.Fprint(buf, ") error {\n")
-
-		fmt.Fprint(buf, "db, err := getDB()\nif err != nil {\nreturn err\n}\n")
-
-		fmt.Fprintf(buf, "_, err = db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
-		for i := range funcDef.Arguments {
-			if i > 0 {
-				fmt.Fprint(buf, ", ")
-			}
-			fmt.Fprintf(buf, "$%d", i+1)
-		}
-		fmt.Fprint(buf, ")\"")
-		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s", dry.StringToLowerCamelCase(arg.Name))
-		}
-		fmt.Fprint(buf, ")\n")
-		fmt.Fprint(buf, "return err\n")
-		fmt.Fprint(buf, "}\n\n")
-	}
-
-	file, err := fs.CleanFilePath(sourceFile).OpenWriter()
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintf(file, "package %s\n\n", packageName)
-	imports.Fprint(file)
-	enums.Fprint(file)
-
-	_, err = file.Write(buf.Bytes())
-	if err != nil {
-		file.Close()
-		return err
-	}
-	err = file.Close()
-	if err != nil {
-		return err
-	}
-
-	output, err := exec.Command("go", "fmt", sourceFile).CombinedOutput()
-	if err != nil {
-		fmt.Println(string(output))
-		return err
-	}
-
-	fmt.Println("Generated file", sourceFile)
-
-	return nil
-}
-
 func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
 	functions := make([]*Function, len(functionNames))
 	for i, name := range functionNames {
@@ -341,6 +197,150 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 			fmt.Fprint(buf, ")\n")
 			fmt.Fprint(buf, "return err\n")
 		}
+		fmt.Fprint(buf, "}\n\n")
+	}
+
+	file, err := fs.CleanFilePath(sourceFile).OpenWriter()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "package %s\n\n", packageName)
+	imports.Fprint(file)
+	enums.Fprint(file)
+
+	_, err = file.Write(buf.Bytes())
+	if err != nil {
+		file.Close()
+		return err
+	}
+	err = file.Close()
+	if err != nil {
+		return err
+	}
+
+	output, err := exec.Command("go", "fmt", sourceFile).CombinedOutput()
+	if err != nil {
+		fmt.Println(string(output))
+		return err
+	}
+
+	fmt.Println("Generated file", sourceFile)
+
+	return nil
+}
+
+func GenerateNoResultFunctionsDBFirstArg(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
+	buf := bytes.NewBuffer(nil)
+	imports := make(Imports)
+	enums := make(Enums)
+
+	for _, funcDef := range functions {
+		imports["github.com/jmoiron/sqlx"] = struct{}{}
+
+		fmt.Fprintf(buf, "func %s(db *sqlx.DB", dry.StringToUpperCamelCase(funcDef.Name))
+		for _, arg := range funcDef.Arguments {
+			fmt.Fprintf(buf, ", %s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(db, arg.Type, imports, enums, typeMap))
+		}
+		fmt.Fprint(buf, ") error {\n")
+
+		fmt.Fprintf(buf, "_, err := db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+		for i := range funcDef.Arguments {
+			if i > 0 {
+				fmt.Fprint(buf, ", ")
+			}
+			fmt.Fprintf(buf, "$%d", i+1)
+		}
+		fmt.Fprint(buf, ")\"")
+		for _, arg := range funcDef.Arguments {
+			fmt.Fprintf(buf, ", %s", dry.StringToLowerCamelCase(arg.Name))
+		}
+		fmt.Fprint(buf, ")\n")
+		fmt.Fprint(buf, "return err\n")
+		fmt.Fprint(buf, "}\n\n")
+	}
+
+	file, err := fs.CleanFilePath(sourceFile).OpenWriter()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "package %s\n\n", packageName)
+	imports.Fprint(file)
+	enums.Fprint(file)
+
+	_, err = file.Write(buf.Bytes())
+	if err != nil {
+		file.Close()
+		return err
+	}
+	err = file.Close()
+	if err != nil {
+		return err
+	}
+
+	output, err := exec.Command("go", "fmt", sourceFile).CombinedOutput()
+	if err != nil {
+		fmt.Println(string(output))
+		return err
+	}
+
+	fmt.Println("Generated file", sourceFile)
+
+	return nil
+}
+
+func GenerateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
+	functions := make([]*Function, len(functionNames))
+	for i, name := range functionNames {
+		functions[i], err = IntrospectFunction(db, name)
+		if err != nil {
+			return err
+		}
+	}
+	return generateNoResultFunctions(db, sourceFile, packageName, typeMap, argsDef, functions...)
+}
+
+func generateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
+	buf := bytes.NewBuffer(nil)
+	imports := make(Imports)
+	enums := make(Enums)
+
+	for _, funcDef := range functions {
+		if argsDef {
+			imports["github.com/ungerik/go-command"] = struct{}{}
+
+			fmt.Fprintf(buf, "var %s struct {\ncommand.ArgsDef\n\n", dry.StringToUpperCamelCase(funcDef.Name)+"Args")
+			for _, arg := range funcDef.Arguments {
+				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(db, imports, enums, typeMap), arg.GoName())
+			}
+			fmt.Fprint(buf, "}\n\n")
+		}
+
+		fmt.Fprintf(buf, "func %s(", dry.StringToUpperCamelCase(funcDef.Name))
+		for i, arg := range funcDef.Arguments {
+			if i > 0 {
+				fmt.Fprintf(buf, ", ")
+			}
+			fmt.Fprintf(buf, "%s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(db, arg.Type, imports, enums, typeMap))
+		}
+		fmt.Fprint(buf, ") error {\n")
+
+		fmt.Fprint(buf, "db, err := getDB()\nif err != nil {\nreturn err\n}\n")
+
+		fmt.Fprintf(buf, "_, err = db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+		for i := range funcDef.Arguments {
+			if i > 0 {
+				fmt.Fprint(buf, ", ")
+			}
+			fmt.Fprintf(buf, "$%d", i+1)
+		}
+		fmt.Fprint(buf, ")\"")
+		for _, arg := range funcDef.Arguments {
+			fmt.Fprintf(buf, ", %s", dry.StringToLowerCamelCase(arg.Name))
+		}
+		fmt.Fprint(buf, ")\n")
+		fmt.Fprint(buf, "return err\n")
 		fmt.Fprint(buf, "}\n\n")
 	}
 
