@@ -1,0 +1,115 @@
+SELECT column_name, data_type, is_nullable, is_updatable FROM information_schema.columns WHERE table_catalog = 'domonda_demo' AND table_schema = 'public' AND table_name = 'document' ORDER BY ordinal_position;
+
+SELECT * FROM information_schema.columns WHERE column_name = 'type' AND  table_schema = 'public' AND table_name = 'document' ORDER BY ordinal_position;
+udt_catalog              | domonda_demo
+udt_schema               | public
+udt_name                 | document_type
+
+
+SELECT * FROM information_schema.columns WHERE column_name = 'page_images' AND  table_schema = 'public' AND table_name = 'document' ORDER BY ordinal_position;
+udt_catalog              | domonda_demo
+udt_schema               | pg_catalog
+udt_name                 | _text
+
+
+domain_catalog           | domonda_demo
+domain_schema            | public
+domain_name              | bank_bic
+udt_catalog              | domonda_demo
+udt_schema               | pg_catalog
+udt_name                 | text
+
+
+
+-[ RECORD 1 ]------------+----------------------------
+table_catalog            | domonda_demo
+table_schema             | public
+table_name               | bank_account
+column_name              | bank_bic
+ordinal_position         | 1
+column_default           | 
+is_nullable              | NO
+data_type                | text
+character_maximum_length | 
+character_octet_length   | 1073741824
+numeric_precision        | 
+numeric_precision_radix  | 
+numeric_scale            | 
+datetime_precision       | 
+interval_type            | 
+interval_precision       | 
+character_set_catalog    | 
+character_set_schema     | 
+character_set_name       | 
+collation_catalog        | 
+collation_schema         | 
+collation_name           | 
+domain_catalog           | domonda_demo
+domain_schema            | public
+domain_name              | bank_bic
+udt_catalog              | domonda_demo
+udt_schema               | pg_catalog
+udt_name                 | text
+scope_catalog            | 
+scope_schema             | 
+scope_name               | 
+maximum_cardinality      | 
+dtd_identifier           | 1
+is_self_referencing      | NO
+is_identity              | NO
+identity_generation      | 
+identity_start           | 
+identity_increment       | 
+identity_maximum         | 
+identity_minimum         | 
+identity_cycle           | NO
+is_generated             | NEVER
+generation_expression    | 
+is_updatable             | YES
+
+
+-[ RECORD 1 ]------------+----------------------------
+table_catalog            | domonda_demo
+table_schema             | public
+table_name               | document
+column_name              | id
+ordinal_position         | 1
+column_default           | 
+is_nullable              | NO
+data_type                | uuid
+character_maximum_length | 
+character_octet_length   | 
+numeric_precision        | 
+numeric_precision_radix  | 
+numeric_scale            | 
+datetime_precision       | 
+interval_type            | 
+interval_precision       | 
+character_set_catalog    | 
+character_set_schema     | 
+character_set_name       | 
+collation_catalog        | 
+collation_schema         | 
+collation_name           | 
+domain_catalog           | 
+domain_schema            | 
+domain_name              | 
+udt_catalog              | domonda_demo
+udt_schema               | pg_catalog
+udt_name                 | uuid
+scope_catalog            | 
+scope_schema             | 
+scope_name               | 
+maximum_cardinality      | 
+dtd_identifier           | 1
+is_self_referencing      | NO
+is_identity              | NO
+identity_generation      | 
+identity_start           | 
+identity_increment       | 
+identity_maximum         | 
+identity_minimum         | 
+identity_cycle           | NO
+is_generated             | NEVER
+generation_expression    | 
+is_updatable             | YES
