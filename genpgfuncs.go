@@ -106,6 +106,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 			goResultType = PgToGoType(db, funcDef.Result, imports, enums, typeMap)
 		}
 		hasResultSlice := strings.HasPrefix(goResultType, "[]")
+		goResultTypeIsPointer := strings.HasPrefix(goResultType, "*")
 
 		if funcDef.Description != "" {
 			desc := strings.ToLower(string(funcDef.Description[0])) + funcDef.Description[1:]
@@ -165,7 +166,10 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 				fmt.Fprint(buf, "result = append(result, value)\n}\n")
 				fmt.Fprintf(buf, "if rows.Err() != nil { return %s, rows.Err() }\n", zeroResultValue)
 			} else {
-				fmt.Fprintf(buf, "err = db.QueryRow(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+				if goResultTypeIsPointer {
+					fmt.Fprintf(buf, "result = new(%s)\n", strings.TrimPrefix(goResultType, "*"))
+				}
+				fmt.Fprintf(buf, "err = db.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 				for i := range funcDef.Arguments {
 					if i > 0 {
 						fmt.Fprint(buf, ", ")
@@ -174,9 +178,18 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 				}
 				fmt.Fprint(buf, ")\"")
 				for _, arg := range funcDef.Arguments {
-					fmt.Fprintf(buf, ", %s", arg.GoName())
+					if arg.Type == "uuid[]" {
+						imports["github.com/domonda/go-genpgfuncs"] = struct{}{}
+						fmt.Fprintf(buf, ", genpgfuncs.UUIDSliceToPgString(%s)", arg.GoName())
+					} else {
+						fmt.Fprintf(buf, ", %s", arg.GoName())
+					}
 				}
-				fmt.Fprint(buf, ").Scan(&result)\n")
+				if goResultTypeIsPointer {
+					fmt.Fprint(buf, ").StructScan(result)\n")
+				} else {
+					fmt.Fprint(buf, ").Scan(&result)\n")
+				}
 				if zeroResultValue != "" {
 					fmt.Fprintf(buf, "if err != nil { return %s, err }\n", zeroResultValue)
 				}

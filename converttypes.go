@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	uuid "github.com/ungerik/go-uuid"
 )
 
 var pgToGoType = map[string]string{
@@ -84,4 +85,17 @@ func PgToGoType(db *sqlx.DB, t string, imports Imports, enums Enums, typeMap map
 		t = "[]" + t
 	}
 	return t
+}
+
+func UUIDSliceToPgString(ids []uuid.UUID) string {
+	var b strings.Builder
+	b.WriteString("{\"")
+	for i, id := range ids {
+		if i > 0 {
+			b.WriteString("\",\"")
+		}
+		b.WriteString(id.String())
+	}
+	b.WriteString("\"}")
+	return b.String()
 }
