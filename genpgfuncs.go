@@ -169,7 +169,11 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 				if goResultTypeIsPointer {
 					fmt.Fprintf(buf, "result = new(%s)\n", strings.TrimPrefix(goResultType, "*"))
 				}
-				fmt.Fprintf(buf, "err = db.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+				if goResultTypeIsPointer {
+					fmt.Fprintf(buf, "err = db.QueryRowx(\"SELECT * FROM %s.%s(", funcDef.Namespace, funcDef.Name)
+				} else {
+					fmt.Fprintf(buf, "err = db.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+				}
 				for i := range funcDef.Arguments {
 					if i > 0 {
 						fmt.Fprint(buf, ", ")
