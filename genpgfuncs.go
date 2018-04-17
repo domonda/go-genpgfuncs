@@ -142,7 +142,7 @@ func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeMap ma
 				zeroResultValue = "result"
 			}
 			if hasResultSlice {
-				fmt.Fprintf(buf, "rows, err :=conn.Query(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+				fmt.Fprintf(buf, "rows, err := conn.Query(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 				for i := range funcDef.Arguments {
 					if i > 0 {
 						fmt.Fprint(buf, ", ")
