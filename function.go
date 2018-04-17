@@ -23,6 +23,6 @@ func (arg *FunctionArgument) GoName() string {
 	return dry.StringToLowerCamelCase(arg.Name)
 }
 
-func (arg *FunctionArgument) GoType(conn *sqlx.DB, imports Imports, enums Enums, typeMap map[string]string) string {
-	return PgToGoType(conn, arg.Type, imports, enums, typeMap)
+func (arg *FunctionArgument) GoType(conn *sqlx.DB, imports Imports, enums Enums, typeImport, typeMap map[string]string) string {
+	return PgToGoType(conn, arg.Type, imports, enums, typeImport, typeMap)
 }

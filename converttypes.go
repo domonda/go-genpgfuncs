@@ -32,13 +32,7 @@ var pgToGoType = map[string]string{
 	"uuid": "uuid.UUID",
 }
 
-var typeImport = map[string]string{
-	"time.Time":    "time",
-	"uuid.UUID":    "github.com/ungerik/go-uuid",
-	"document.Doc": "github.com/domonda/Domonda/go/document",
-}
-
-func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeMap map[string]string) string {
+func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImport, typeMap map[string]string) string {
 	slice := strings.HasSuffix(t, "[]")
 	if slice {
 		t = strings.TrimSuffix(t, "[]")
