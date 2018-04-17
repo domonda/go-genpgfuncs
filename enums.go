@@ -74,14 +74,14 @@ func (enums Enums) Fprint(writer io.Writer) {
 	}
 }
 
-func GetEnumValues(db *sqlx.DB, enum string) (values []string, err error) {
+func GetEnumValues(conn *sqlx.DB, enum string) (values []string, err error) {
 	const query = `
 		SELECT e.enumlabel
 			FROM pg_enum AS e
 			JOIN pg_type t ON e.enumtypid = t.oid
 			WHERE t.typname = $1`
 
-	rows, err := db.Query(query, enum)
+	rows, err := conn.Query(query, enum)
 	if err != nil {
 		return nil, err
 	}

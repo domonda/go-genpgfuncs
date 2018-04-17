@@ -38,7 +38,7 @@ var typeImport = map[string]string{
 	"document.Doc": "github.com/domonda/Domonda/go/document",
 }
 
-func PgToGoType(db *sqlx.DB, t string, imports Imports, enums Enums, typeMap map[string]string) string {
+func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeMap map[string]string) string {
 	slice := strings.HasSuffix(t, "[]")
 	if slice {
 		t = strings.TrimSuffix(t, "[]")
@@ -67,7 +67,7 @@ func PgToGoType(db *sqlx.DB, t string, imports Imports, enums Enums, typeMap map
 		return goType
 	}
 
-	values, _ := GetEnumValues(db, t)
+	values, _ := GetEnumValues(conn, t)
 	if len(values) > 0 {
 		enum := Enum{
 			Name:   t,

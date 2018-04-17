@@ -13,7 +13,7 @@ import (
 	fs "github.com/ungerik/go-fs"
 )
 
-func IntrospectFunction(db *sqlx.DB, name string) (f *Function, err error) {
+func IntrospectFunction(conn *sqlx.DB, name string) (f *Function, err error) {
 	// https://stackoverflow.com/questions/1347282/how-can-i-get-a-list-of-all-functions-stored-in-the-database-of-a-particular-sch
 	const query = `
 		SELECT
@@ -45,7 +45,7 @@ func IntrospectFunction(db *sqlx.DB, name string) (f *Function, err error) {
 		kind        string
 		description null.String
 	)
-	err = db.QueryRow(query, namespace, name).Scan(&arguments, &result, &kind, &description)
+	err = conn.QueryRow(query, namespace, name).Scan(&arguments, &result, &kind, &description)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +71,10 @@ func IntrospectFunction(db *sqlx.DB, name string) (f *Function, err error) {
 	return f, nil
 }
 
-func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
+func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
 	functions := make([]*Function, len(functionNames))
 	for i, name := range functionNames {
-		functions[i], err = IntrospectFunction(db, name)
+		functions[i], err = IntrospectFunction(conn, name)
 		if err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 			fmt.Fprintf(buf, "// %sArgs defines the arguments for %s\n", goFuncName, goFuncName)
 			fmt.Fprintf(buf, "var %sArgs struct {\ncommand.ArgsDef\n\n", goFuncName)
 			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(db, imports, enums, typeMap), arg.GoName())
+				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(conn, imports, enums, typeMap), arg.GoName())
 			}
 			fmt.Fprint(buf, "}\n\n")
 		}
@@ -103,7 +103,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 		goResultType := ""
 		hasResult := funcDef.Result != ""
 		if hasResult {
-			goResultType = PgToGoType(db, funcDef.Result, imports, enums, typeMap)
+			goResultType = PgToGoType(conn, funcDef.Result, imports, enums, typeMap)
 		}
 		hasResultSlice := strings.HasPrefix(goResultType, "[]")
 		goResultTypeIsPointer := strings.HasPrefix(goResultType, "*")
@@ -120,7 +120,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 			if i > 0 {
 				fmt.Fprintf(buf, ", ")
 			}
-			fmt.Fprintf(buf, "%s %s", arg.GoName(), arg.GoType(db, imports, enums, typeMap))
+			fmt.Fprintf(buf, "%s %s", arg.GoName(), arg.GoType(conn, imports, enums, typeMap))
 		}
 		fmt.Fprint(buf, ")")
 
@@ -130,10 +130,10 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 				zeroResultValue = "result"
 			}
 			fmt.Fprintf(buf, " (result %s, err error) {\n", goResultType)
-			fmt.Fprintf(buf, "db, err := getDB()\nif err != nil {\nreturn %s, err\n}\n", zeroResultValue)
+			fmt.Fprintf(buf, "conn, err := getConn()\nif err != nil {\nreturn %s, err\n}\n", zeroResultValue)
 		} else {
 			fmt.Fprint(buf, " error {\n")
-			fmt.Fprint(buf, "db, err := getDB()\nif err != nil { return err }\n")
+			fmt.Fprint(buf, "conn, err := getConn()\nif err != nil { return err }\n")
 		}
 
 		if hasResult {
@@ -142,7 +142,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 				zeroResultValue = "result"
 			}
 			if hasResultSlice {
-				fmt.Fprintf(buf, "rows, err := db.Query(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+				fmt.Fprintf(buf, "rows, err :=conn.Query(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 				for i := range funcDef.Arguments {
 					if i > 0 {
 						fmt.Fprint(buf, ", ")
@@ -170,9 +170,9 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 					fmt.Fprintf(buf, "result = new(%s)\n", strings.TrimPrefix(goResultType, "*"))
 				}
 				if goResultTypeIsPointer {
-					fmt.Fprintf(buf, "err = db.QueryRowx(\"SELECT * FROM %s.%s(", funcDef.Namespace, funcDef.Name)
+					fmt.Fprintf(buf, "err = conn.QueryRowx(\"SELECT * FROM %s.%s(", funcDef.Namespace, funcDef.Name)
 				} else {
-					fmt.Fprintf(buf, "err = db.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+					fmt.Fprintf(buf, "err = conn.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 				}
 				for i := range funcDef.Arguments {
 					if i > 0 {
@@ -200,7 +200,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 			}
 			fmt.Fprint(buf, "return result, nil\n")
 		} else {
-			fmt.Fprintf(buf, "_, err = db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+			fmt.Fprintf(buf, "_, err = conn.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 			for i := range funcDef.Arguments {
 				if i > 0 {
 					fmt.Fprint(buf, ", ")
@@ -247,7 +247,7 @@ func GenerateFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[
 	return nil
 }
 
-func GenerateNoResultFunctionsDBFirstArg(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
+func GenerateNoResultFunctionsDBFirstArg(conn *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
 	buf := bytes.NewBuffer(nil)
 	imports := make(Imports)
 	enums := make(Enums)
@@ -255,13 +255,13 @@ func GenerateNoResultFunctionsDBFirstArg(db *sqlx.DB, sourceFile, packageName st
 	for _, funcDef := range functions {
 		imports["github.com/jmoiron/sqlx"] = struct{}{}
 
-		fmt.Fprintf(buf, "func %s(db *sqlx.DB", dry.StringToUpperCamelCase(funcDef.Name))
+		fmt.Fprintf(buf, "func %s(conn *sqlx.DB", dry.StringToUpperCamelCase(funcDef.Name))
 		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(db, arg.Type, imports, enums, typeMap))
+			fmt.Fprintf(buf, ", %s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(conn, arg.Type, imports, enums, typeMap))
 		}
 		fmt.Fprint(buf, ") error {\n")
 
-		fmt.Fprintf(buf, "_, err := db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+		fmt.Fprintf(buf, "_, err := conn.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 		for i := range funcDef.Arguments {
 			if i > 0 {
 				fmt.Fprint(buf, ", ")
@@ -307,18 +307,18 @@ func GenerateNoResultFunctionsDBFirstArg(db *sqlx.DB, sourceFile, packageName st
 	return nil
 }
 
-func GenerateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
+func GenerateNoResultFunctions(conn *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
 	functions := make([]*Function, len(functionNames))
 	for i, name := range functionNames {
-		functions[i], err = IntrospectFunction(db, name)
+		functions[i], err = IntrospectFunction(conn, name)
 		if err != nil {
 			return err
 		}
 	}
-	return generateNoResultFunctions(db, sourceFile, packageName, typeMap, argsDef, functions...)
+	return generateNoResultFunctions(conn, sourceFile, packageName, typeMap, argsDef, functions...)
 }
 
-func generateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
+func generateNoResultFunctions(conn *sqlx.DB, sourceFile, packageName string, typeMap map[string]string, argsDef bool, functions ...*Function) error {
 	buf := bytes.NewBuffer(nil)
 	imports := make(Imports)
 	enums := make(Enums)
@@ -329,7 +329,7 @@ func generateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, type
 
 			fmt.Fprintf(buf, "var %s struct {\ncommand.ArgsDef\n\n", dry.StringToUpperCamelCase(funcDef.Name)+"Args")
 			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(db, imports, enums, typeMap), arg.GoName())
+				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(conn, imports, enums, typeMap), arg.GoName())
 			}
 			fmt.Fprint(buf, "}\n\n")
 		}
@@ -339,13 +339,13 @@ func generateNoResultFunctions(db *sqlx.DB, sourceFile, packageName string, type
 			if i > 0 {
 				fmt.Fprintf(buf, ", ")
 			}
-			fmt.Fprintf(buf, "%s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(db, arg.Type, imports, enums, typeMap))
+			fmt.Fprintf(buf, "%s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(conn, arg.Type, imports, enums, typeMap))
 		}
 		fmt.Fprint(buf, ") error {\n")
 
-		fmt.Fprint(buf, "db, err := getDB()\nif err != nil {\nreturn err\n}\n")
+		fmt.Fprint(buf, "conn, err := getConn()\nif err != nil {\nreturn err\n}\n")
 
-		fmt.Fprintf(buf, "_, err = db.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+		fmt.Fprintf(buf, "_, err = conn.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
 		for i := range funcDef.Arguments {
 			if i > 0 {
 				fmt.Fprint(buf, ", ")
