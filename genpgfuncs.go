@@ -13,7 +13,7 @@ import (
 	fs "github.com/ungerik/go-fs"
 )
 
-func IntrospectFunction(conn *sqlx.DB, name string) (f *Function, err error) {
+func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err error) {
 	// https://stackoverflow.com/questions/1347282/how-can-i-get-a-list-of-all-functions-stored-in-the-database-of-a-particular-sch
 	const query = `
 		SELECT
@@ -32,12 +32,6 @@ func IntrospectFunction(conn *sqlx.DB, name string) (f *Function, err error) {
 		WHERE pg_catalog.pg_function_is_visible(p.oid)
 			AND n.nspname = $1
 			AND p.proname = $2`
-
-	namespace := "public"
-	if p := strings.IndexRune(name, '.'); p != -1 {
-		namespace = name[:p]
-		name = name[p+1:]
-	}
 
 	var (
 		arguments   string
@@ -74,7 +68,12 @@ func IntrospectFunction(conn *sqlx.DB, name string) (f *Function, err error) {
 func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeImport, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
 	functions := make([]*Function, len(functionNames))
 	for i, name := range functionNames {
-		functions[i], err = IntrospectFunction(conn, name)
+		namespace := "public"
+		if p := strings.IndexRune(name, '.'); p != -1 {
+			namespace = name[:p]
+			name = name[p+1:]
+		}
+		functions[i], err = IntrospectFunction(conn, namespace, name)
 		if err != nil {
 			return err
 		}
@@ -310,7 +309,12 @@ func GenerateNoResultFunctionsDBFirstArg(conn *sqlx.DB, sourceFile, packageName 
 func GenerateNoResultFunctions(conn *sqlx.DB, sourceFile, packageName string, typeImport, typeMap map[string]string, argsDef bool, functionNames ...string) (err error) {
 	functions := make([]*Function, len(functionNames))
 	for i, name := range functionNames {
-		functions[i], err = IntrospectFunction(conn, name)
+		namespace := "public"
+		if p := strings.IndexRune(name, '.'); p != -1 {
+			namespace = name[:p]
+			name = name[p+1:]
+		}
+		functions[i], err = IntrospectFunction(conn, namespace, name)
 		if err != nil {
 			return err
 		}
