@@ -14,7 +14,27 @@ import (
 )
 
 func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err error) {
+	// fmt.Println("IntrospectFunction", namespace, name)
+
 	// https://stackoverflow.com/questions/1347282/how-can-i-get-a-list-of-all-functions-stored-in-the-database-of-a-particular-sch
+	// const query = `
+	// 	SELECT
+	// 		pg_catalog.pg_get_function_arguments(p.oid) AS "Arguments",
+	// 		pg_catalog.pg_get_function_result(p.oid) AS "Result",
+	// 		CASE
+	// 			WHEN p.proisagg THEN 'agg'
+	// 			WHEN p.proiswindow THEN 'window'
+	// 			WHEN p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype THEN 'trigger'
+	// 			ELSE 'normal'
+	// 		END AS "Type",
+	// 		d.description
+	// 	FROM pg_catalog.pg_proc AS p
+	// 		LEFT JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+	// 		LEFT JOIN pg_catalog.pg_description AS d ON d.objoid = p.oid
+	// 	WHERE pg_catalog.pg_function_is_visible(p.oid)
+	// 		AND n.nspname = $1
+	// 		AND p.proname = $2`
+
 	const query = `
 		SELECT
 			pg_catalog.pg_get_function_arguments(p.oid) AS "Arguments",
@@ -29,9 +49,7 @@ func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err
 		FROM pg_catalog.pg_proc AS p
 			LEFT JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
 			LEFT JOIN pg_catalog.pg_description AS d ON d.objoid = p.oid
-		WHERE pg_catalog.pg_function_is_visible(p.oid)
-			AND n.nspname = $1
-			AND p.proname = $2`
+		WHERE n.nspname = $1 AND p.proname = $2`
 
 	var (
 		arguments   string

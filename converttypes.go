@@ -28,6 +28,8 @@ var pgToGoType = map[string]string{
 	"timestamp":        "time.Time",
 	"timestamptz":      "time.Time",
 	"bytea":            "[]byte",
+	"json":             "types.JSONText",
+	"jsonb":            "types.JSONText",
 
 	"uuid": "uuid.UUID",
 }
