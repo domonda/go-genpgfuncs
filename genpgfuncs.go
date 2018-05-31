@@ -8,7 +8,7 @@ import (
 
 	"github.com/guregu/null"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
+	"github.com/domonda/errors"
 	dry "github.com/ungerik/go-dry"
 	fs "github.com/ungerik/go-fs"
 )
