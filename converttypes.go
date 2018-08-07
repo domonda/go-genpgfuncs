@@ -84,14 +84,21 @@ func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImpor
 }
 
 func UUIDSliceToPgString(ids []uuid.UUID) string {
+	if ids == nil {
+		return "NULL"
+	}
+
 	var b strings.Builder
-	b.WriteString("{\"")
+	b.WriteByte('{')
 	for i, id := range ids {
 		if i > 0 {
-			b.WriteString("\",\"")
+			b.WriteByte(',')
 		}
+		b.WriteByte('"')
 		b.WriteString(id.String())
+		b.WriteByte('"')
 	}
-	b.WriteString("\"}")
+	b.WriteByte('}')
+
 	return b.String()
 }
