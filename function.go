@@ -2,7 +2,6 @@ package genpgfuncs
 
 import (
 	"github.com/jmoiron/sqlx"
-	dry "github.com/ungerik/go-dry"
 )
 
 type Function struct {
@@ -20,7 +19,7 @@ type FunctionArgument struct {
 }
 
 func (arg *FunctionArgument) GoName() string {
-	return dry.StringToLowerCamelCase(arg.Name)
+	return unexportedGoName(arg.Name)
 }
 
 func (arg *FunctionArgument) GoType(conn *sqlx.DB, imports Imports, enums Enums, typeImport, typeMap map[string]string) string {

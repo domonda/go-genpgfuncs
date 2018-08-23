@@ -6,10 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/domonda/errors"
 	"github.com/guregu/null"
 	"github.com/jmoiron/sqlx"
-	"github.com/domonda/errors"
-	dry "github.com/ungerik/go-dry"
 	fs "github.com/ungerik/go-fs"
 )
 
@@ -102,7 +101,7 @@ func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeImport
 	enums := make(Enums)
 
 	for _, funcDef := range functions {
-		goFuncName := dry.StringToUpperCamelCase(funcDef.Name)
+		goFuncName := exportedGoName(funcDef.Name)
 
 		fmt.Println(funcDef.Namespace+"."+funcDef.Name, "=>", packageName+"."+goFuncName)
 
@@ -112,7 +111,7 @@ func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeImport
 			fmt.Fprintf(buf, "// %sArgs defines the arguments for %s\n", goFuncName, goFuncName)
 			fmt.Fprintf(buf, "var %sArgs struct {\ncommand.ArgsDef\n\n", goFuncName)
 			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(conn, imports, enums, typeImport, typeMap), arg.GoName())
+				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", exportedGoName(arg.Name), arg.GoType(conn, imports, enums, typeImport, typeMap), arg.GoName())
 			}
 			fmt.Fprint(buf, "}\n\n")
 		}
@@ -272,9 +271,9 @@ func GenerateNoResultFunctionsDBFirstArg(conn *sqlx.DB, sourceFile, packageName 
 	for _, funcDef := range functions {
 		imports["github.com/jmoiron/sqlx"] = struct{}{}
 
-		fmt.Fprintf(buf, "func %s(conn *sqlx.DB", dry.StringToUpperCamelCase(funcDef.Name))
+		fmt.Fprintf(buf, "func %s(conn *sqlx.DB", exportedGoName(funcDef.Name))
 		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(conn, arg.Type, imports, enums, typeImport, typeMap))
+			fmt.Fprintf(buf, ", %s %s", unexportedGoName(arg.Name), PgToGoType(conn, arg.Type, imports, enums, typeImport, typeMap))
 		}
 		fmt.Fprint(buf, ") error {\n")
 
@@ -287,7 +286,7 @@ func GenerateNoResultFunctionsDBFirstArg(conn *sqlx.DB, sourceFile, packageName 
 		}
 		fmt.Fprint(buf, ")\"")
 		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s", dry.StringToLowerCamelCase(arg.Name))
+			fmt.Fprintf(buf, ", %s", unexportedGoName(arg.Name))
 		}
 		fmt.Fprint(buf, ")\n")
 		fmt.Fprint(buf, "return err\n")
@@ -349,19 +348,19 @@ func generateNoResultFunctions(conn *sqlx.DB, sourceFile, packageName string, ty
 		if argsDef {
 			imports["github.com/ungerik/go-command"] = struct{}{}
 
-			fmt.Fprintf(buf, "var %s struct {\ncommand.ArgsDef\n\n", dry.StringToUpperCamelCase(funcDef.Name)+"Args")
+			fmt.Fprintf(buf, "var %s struct {\ncommand.ArgsDef\n\n", exportedGoName(funcDef.Name)+"Args")
 			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", dry.StringToUpperCamelCase(arg.Name), arg.GoType(conn, imports, enums, typeImport, typeMap), arg.GoName())
+				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", exportedGoName(arg.Name), arg.GoType(conn, imports, enums, typeImport, typeMap), arg.GoName())
 			}
 			fmt.Fprint(buf, "}\n\n")
 		}
 
-		fmt.Fprintf(buf, "func %s(", dry.StringToUpperCamelCase(funcDef.Name))
+		fmt.Fprintf(buf, "func %s(", exportedGoName(funcDef.Name))
 		for i, arg := range funcDef.Arguments {
 			if i > 0 {
 				fmt.Fprintf(buf, ", ")
 			}
-			fmt.Fprintf(buf, "%s %s", dry.StringToLowerCamelCase(arg.Name), PgToGoType(conn, arg.Type, imports, enums, typeImport, typeMap))
+			fmt.Fprintf(buf, "%s %s", unexportedGoName(arg.Name), PgToGoType(conn, arg.Type, imports, enums, typeImport, typeMap))
 		}
 		fmt.Fprint(buf, ") error {\n")
 
@@ -376,7 +375,7 @@ func generateNoResultFunctions(conn *sqlx.DB, sourceFile, packageName string, ty
 		}
 		fmt.Fprint(buf, ")\"")
 		for _, arg := range funcDef.Arguments {
-			fmt.Fprintf(buf, ", %s", dry.StringToLowerCamelCase(arg.Name))
+			fmt.Fprintf(buf, ", %s", unexportedGoName(arg.Name))
 		}
 		fmt.Fprint(buf, ")\n")
 		fmt.Fprint(buf, "return err\n")

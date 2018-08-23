@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	dry "github.com/ungerik/go-dry"
 )
 
 type Enum struct {
@@ -19,13 +18,13 @@ func (enum *Enum) GoName() string {
 	name := enum.Name
 	p := strings.LastIndexByte(name, '.')
 	name = name[p+1:]
-	return dry.StringToUpperCamelCase(name)
+	return exportedGoName(name)
 }
 
 func (enum *Enum) GoConstsAndValues() (constsAndValues []string) {
 	baseName := enum.GoName()
 	for _, enumValue := range enum.Values {
-		constName := baseName + dry.StringToUpperCamelCase(enumValue)
+		constName := baseName + exportedGoName(enumValue)
 		constsAndValues = append(constsAndValues, constName, enumValue)
 	}
 	return constsAndValues
