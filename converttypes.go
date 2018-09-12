@@ -44,8 +44,8 @@ func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImpor
 
 	if goType, ok := typeMap[t]; ok {
 		derefType := strings.TrimPrefix(goType, "*")
-		if imp, hasImport := typeImport[derefType]; hasImport {
-			imports[imp] = struct{}{}
+		if importPath, hasImport := typeImport[derefType]; hasImport {
+			imports.Require(importPath)
 		}
 		if slice {
 			goType = "[]" + goType
@@ -54,8 +54,8 @@ func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImpor
 	}
 
 	if goType, ok := pgToGoType[t]; ok {
-		if imp, hasImport := typeImport[goType]; hasImport {
-			imports[imp] = struct{}{}
+		if importPath, hasImport := typeImport[goType]; hasImport {
+			imports.Require(importPath)
 		}
 		if slice {
 			goType = "[]" + goType
@@ -101,4 +101,16 @@ func UUIDSliceToPgString(ids []uuid.UUID) string {
 	b.WriteByte('}')
 
 	return b.String()
+}
+
+type packageType struct {
+	Package  string
+	TypeName string
+}
+
+var scanableTypes = map[string]packageType{
+	"[]bool":    {"github.com/lib/pq", "pq.BoolArray"},
+	"[]float64": {"github.com/lib/pq", "pq.Float64Array"},
+	"[]int64":   {"github.com/lib/pq", "pq.Int64Array"},
+	"[]string":  {"github.com/lib/pq", "pq.StringArray"},
 }

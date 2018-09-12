@@ -103,136 +103,7 @@ func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeImport
 	enums := make(Enums)
 
 	for _, funcDef := range functions {
-		goFuncName := exportedGoName(funcDef.Name)
-
-		fmt.Println(funcDef.Namespace+"."+funcDef.Name, "=>", packageName+"."+goFuncName)
-
-		if argsDef {
-			imports["github.com/ungerik/go-command"] = struct{}{}
-
-			fmt.Fprintf(buf, "// %sArgs defines the arguments for %s\n", goFuncName, goFuncName)
-			fmt.Fprintf(buf, "var %sArgs struct {\ncommand.ArgsDef\n\n", goFuncName)
-			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", exportedGoName(arg.Name), arg.GoType(conn, imports, enums, typeImport, typeMap), arg.GoName())
-			}
-			fmt.Fprint(buf, "}\n\n")
-		}
-
-		goResultType := ""
-		hasResult := funcDef.Result != ""
-		if hasResult {
-			goResultType = PgToGoType(conn, funcDef.Result, imports, enums, typeImport, typeMap)
-		}
-		hasResultSlice := strings.HasPrefix(goResultType, "[]")
-		goResultTypeIsPointer := strings.HasPrefix(goResultType, "*")
-
-		if funcDef.Description != "" {
-			desc := strings.ToLower(string(funcDef.Description[0])) + funcDef.Description[1:]
-			for _, arg := range funcDef.Arguments {
-				desc = strings.Replace(desc, arg.Name, arg.GoName(), -1)
-			}
-			fmt.Fprintf(buf, "// %s %s\n", goFuncName, desc)
-		}
-		fmt.Fprintf(buf, "func %s(", goFuncName)
-		for i, arg := range funcDef.Arguments {
-			if i > 0 {
-				fmt.Fprintf(buf, ", ")
-			}
-			fmt.Fprintf(buf, "%s %s", arg.GoName(), arg.GoType(conn, imports, enums, typeImport, typeMap))
-		}
-		fmt.Fprint(buf, ")")
-
-		if hasResult {
-			zeroResultValue := goZeroValueForType(goResultType)
-			if zeroResultValue == "" {
-				zeroResultValue = "result"
-			}
-			fmt.Fprintf(buf, " (result %s, err error) {\n", goResultType)
-			fmt.Fprintf(buf, "conn, err := getConn()\nif err != nil {\nreturn %s, err\n}\n", zeroResultValue)
-		} else {
-			fmt.Fprint(buf, " error {\n")
-			fmt.Fprint(buf, "conn, err := getConn()\nif err != nil { return err }\n")
-		}
-
-		if hasResult {
-			zeroResultValue := goZeroValueForType(goResultType)
-			if zeroResultValue == "" {
-				zeroResultValue = "result"
-			}
-			if hasResultSlice {
-				fmt.Fprintf(buf, "rows, err := conn.Query(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
-				for i := range funcDef.Arguments {
-					if i > 0 {
-						fmt.Fprint(buf, ", ")
-					}
-					fmt.Fprintf(buf, "$%d", i+1)
-				}
-				fmt.Fprint(buf, ")\"")
-				for _, arg := range funcDef.Arguments {
-					fmt.Fprintf(buf, ", %s", arg.GoName())
-				}
-				fmt.Fprintf(buf, ")\nif err != nil { return %s, err }\ndefer rows.Close()\n", zeroResultValue)
-				fmt.Fprint(buf, "for rows.Next() {\n")
-				elemType := strings.TrimPrefix(goResultType, "[]")
-				if strings.HasPrefix(elemType, "*") {
-					fmt.Fprintf(buf, "value := new(%s)\n", strings.TrimPrefix(elemType, "*"))
-					fmt.Fprintf(buf, "err = rows.Scan(value)\nif err != nil { return %s, err }\n", zeroResultValue)
-				} else {
-					fmt.Fprintf(buf, "var value %s\n", elemType)
-					fmt.Fprintf(buf, "err = rows.Scan(&value)\nif err != nil { return %s, err }\n", zeroResultValue)
-				}
-				fmt.Fprint(buf, "result = append(result, value)\n}\n")
-				fmt.Fprintf(buf, "if rows.Err() != nil { return %s, rows.Err() }\n", zeroResultValue)
-			} else {
-				if goResultTypeIsPointer {
-					fmt.Fprintf(buf, "result = new(%s)\n", strings.TrimPrefix(goResultType, "*"))
-				}
-				if goResultTypeIsPointer {
-					fmt.Fprintf(buf, "err = conn.QueryRowx(\"SELECT * FROM %s.%s(", funcDef.Namespace, funcDef.Name)
-				} else {
-					fmt.Fprintf(buf, "err = conn.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
-				}
-				for i := range funcDef.Arguments {
-					if i > 0 {
-						fmt.Fprint(buf, ", ")
-					}
-					fmt.Fprintf(buf, "$%d", i+1)
-				}
-				fmt.Fprint(buf, ")\"")
-				for _, arg := range funcDef.Arguments {
-					if arg.Type == "uuid[]" {
-						imports["github.com/domonda/go-genpgfuncs"] = struct{}{}
-						fmt.Fprintf(buf, ", genpgfuncs.UUIDSliceToPgString(%s)", arg.GoName())
-					} else {
-						fmt.Fprintf(buf, ", %s", arg.GoName())
-					}
-				}
-				if goResultTypeIsPointer {
-					fmt.Fprint(buf, ").StructScan(result)\n")
-				} else {
-					fmt.Fprint(buf, ").Scan(&result)\n")
-				}
-				if zeroResultValue != "" {
-					fmt.Fprintf(buf, "if err != nil { return %s, err }\n", zeroResultValue)
-				}
-			}
-			fmt.Fprint(buf, "return result, nil\n")
-		} else {
-			fmt.Fprintf(buf, "_, err = conn.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
-			for i := range funcDef.Arguments {
-				if i > 0 {
-					fmt.Fprint(buf, ", ")
-				}
-				fmt.Fprintf(buf, "$%d", i+1)
-			}
-			fmt.Fprint(buf, ")\"")
-			for _, arg := range funcDef.Arguments {
-				fmt.Fprintf(buf, ", %s", arg.GoName())
-			}
-			fmt.Fprint(buf, ")\n")
-			fmt.Fprint(buf, "return err\n")
-		}
-		fmt.Fprint(buf, "}\n\n")
+		generateFunction(conn, buf, packageName, funcDef, imports, enums, typeImport, typeMap, argsDef)
 	}
 
 	file, err := fs.CleanFilePath(sourceFile).OpenWriter()
@@ -265,13 +136,155 @@ func GenerateFunctions(conn *sqlx.DB, sourceFile, packageName string, typeImport
 	return nil
 }
 
+func generateFunction(conn *sqlx.DB, buf *bytes.Buffer, packageName string, funcDef *Function, imports Imports, enums Enums, typeImport, typeMap map[string]string, argsDef bool) {
+	goFuncName := exportedGoName(funcDef.Name)
+
+	fmt.Println(funcDef.Namespace+"."+funcDef.Name, "=>", packageName+"."+goFuncName)
+
+	if argsDef {
+		imports.Require("github.com/ungerik/go-command")
+
+		fmt.Fprintf(buf, "// %sArgs defines the arguments for %s\n", goFuncName, goFuncName)
+		fmt.Fprintf(buf, "var %sArgs struct {\ncommand.ArgsDef\n\n", goFuncName)
+		for _, arg := range funcDef.Arguments {
+			fmt.Fprintf(buf, "%s %s `arg:\"%s\"`\n", exportedGoName(arg.Name), arg.GoType(conn, imports, enums, typeImport, typeMap), arg.GoName())
+		}
+		fmt.Fprint(buf, "}\n\n")
+	}
+
+	goResultType := ""
+	hasResult := funcDef.Result != ""
+	if hasResult {
+		goResultType = PgToGoType(conn, funcDef.Result, imports, enums, typeImport, typeMap)
+	}
+	hasResultSETOF := strings.HasPrefix(funcDef.Result, "SETOF ")
+	// hasResultSlice := strings.HasPrefix(goResultType, "[]"
+	if !hasResultSETOF {
+		scanableType, ok := scanableTypes[goResultType]
+		if ok {
+			imports.Require(scanableType.Package)
+			goResultType = scanableType.TypeName
+		}
+	}
+
+	goResultTypeIsPointer := strings.HasPrefix(goResultType, "*")
+
+	if funcDef.Description != "" {
+		desc := strings.ToLower(string(funcDef.Description[0])) + funcDef.Description[1:]
+		for _, arg := range funcDef.Arguments {
+			desc = strings.Replace(desc, arg.Name, arg.GoName(), -1)
+		}
+		fmt.Fprintf(buf, "// %s %s\n", goFuncName, desc)
+	}
+	fmt.Fprintf(buf, "func %s(", goFuncName)
+	for i, arg := range funcDef.Arguments {
+		if i > 0 {
+			fmt.Fprintf(buf, ", ")
+		}
+		fmt.Fprintf(buf, "%s %s", arg.GoName(), arg.GoType(conn, imports, enums, typeImport, typeMap))
+	}
+	fmt.Fprint(buf, ")")
+
+	if hasResult {
+		zeroResultValue := goZeroValueForType(goResultType)
+		if zeroResultValue == "" {
+			zeroResultValue = "result"
+		}
+		fmt.Fprintf(buf, " (result %s, err error) {\n", goResultType)
+		fmt.Fprintf(buf, "conn, err := getConn()\nif err != nil {\nreturn %s, err\n}\n", zeroResultValue)
+	} else {
+		fmt.Fprint(buf, " error {\n")
+		fmt.Fprint(buf, "conn, err := getConn()\nif err != nil { return err }\n")
+	}
+
+	if hasResult {
+		zeroResultValue := goZeroValueForType(goResultType)
+		if zeroResultValue == "" {
+			zeroResultValue = "result"
+		}
+		if hasResultSETOF {
+			fmt.Fprintf(buf, "rows, err := conn.Query(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+			for i := range funcDef.Arguments {
+				if i > 0 {
+					fmt.Fprint(buf, ", ")
+				}
+				fmt.Fprintf(buf, "$%d", i+1)
+			}
+			fmt.Fprint(buf, ")\"")
+			for _, arg := range funcDef.Arguments {
+				fmt.Fprintf(buf, ", %s", arg.GoName())
+			}
+			fmt.Fprintf(buf, ")\nif err != nil { return %s, err }\ndefer rows.Close()\n", zeroResultValue)
+			fmt.Fprint(buf, "for rows.Next() {\n")
+			elemType := strings.TrimPrefix(goResultType, "[]")
+			if strings.HasPrefix(elemType, "*") {
+				fmt.Fprintf(buf, "value := new(%s)\n", strings.TrimPrefix(elemType, "*"))
+				fmt.Fprintf(buf, "err = rows.Scan(value)\nif err != nil { return %s, err }\n", zeroResultValue)
+			} else {
+				fmt.Fprintf(buf, "var value %s\n", elemType)
+				fmt.Fprintf(buf, "err = rows.Scan(&value)\nif err != nil { return %s, err }\n", zeroResultValue)
+			}
+			fmt.Fprint(buf, "result = append(result, value)\n}\n")
+			fmt.Fprintf(buf, "if rows.Err() != nil { return %s, rows.Err() }\n", zeroResultValue)
+		} else {
+			if goResultTypeIsPointer {
+				fmt.Fprintf(buf, "result = new(%s)\n", strings.TrimPrefix(goResultType, "*"))
+			}
+			if goResultTypeIsPointer {
+				fmt.Fprintf(buf, "err = conn.QueryRowx(\"SELECT * FROM %s.%s(", funcDef.Namespace, funcDef.Name)
+			} else {
+				fmt.Fprintf(buf, "err = conn.QueryRowx(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+			}
+			for i := range funcDef.Arguments {
+				if i > 0 {
+					fmt.Fprint(buf, ", ")
+				}
+				fmt.Fprintf(buf, "$%d", i+1)
+			}
+			fmt.Fprint(buf, ")\"")
+			for _, arg := range funcDef.Arguments {
+				if arg.Type == "uuid[]" {
+					imports.Require("github.com/domonda/go-genpgfuncs")
+					fmt.Fprintf(buf, ", genpgfuncs.UUIDSliceToPgString(%s)", arg.GoName())
+				} else {
+					fmt.Fprintf(buf, ", %s", arg.GoName())
+				}
+			}
+			if goResultTypeIsPointer {
+				fmt.Fprint(buf, ").StructScan(result)\n")
+			} else {
+				fmt.Fprint(buf, ").Scan(&result)\n")
+			}
+			if zeroResultValue != "" {
+				fmt.Fprintf(buf, "if err != nil { return %s, err }\n", zeroResultValue)
+			}
+		}
+		fmt.Fprint(buf, "return result, nil\n")
+	} else {
+		fmt.Fprintf(buf, "_, err = conn.Exec(\"SELECT %s.%s(", funcDef.Namespace, funcDef.Name)
+		for i := range funcDef.Arguments {
+			if i > 0 {
+				fmt.Fprint(buf, ", ")
+			}
+			fmt.Fprintf(buf, "$%d", i+1)
+		}
+		fmt.Fprint(buf, ")\"")
+		for _, arg := range funcDef.Arguments {
+			fmt.Fprintf(buf, ", %s", arg.GoName())
+		}
+		fmt.Fprint(buf, ")\n")
+		fmt.Fprint(buf, "return err\n")
+	}
+	fmt.Fprint(buf, "}\n\n")
+}
+
 func GenerateNoResultFunctionsDBFirstArg(conn *sqlx.DB, sourceFile, packageName string, typeImport, typeMap map[string]string, argsDef bool, functions ...*Function) error {
 	buf := bytes.NewBuffer(nil)
 	imports := make(Imports)
 	enums := make(Enums)
 
 	for _, funcDef := range functions {
-		imports["github.com/jmoiron/sqlx"] = struct{}{}
+		imports.Require("github.com/jmoiron/sqlx")
 
 		fmt.Fprintf(buf, "func %s(conn *sqlx.DB", exportedGoName(funcDef.Name))
 		for _, arg := range funcDef.Arguments {
@@ -348,7 +361,7 @@ func generateNoResultFunctions(conn *sqlx.DB, sourceFile, packageName string, ty
 
 	for _, funcDef := range functions {
 		if argsDef {
-			imports["github.com/ungerik/go-command"] = struct{}{}
+			imports.Require("github.com/ungerik/go-command")
 
 			fmt.Fprintf(buf, "var %s struct {\ncommand.ArgsDef\n\n", exportedGoName(funcDef.Name)+"Args")
 			for _, arg := range funcDef.Arguments {
