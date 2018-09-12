@@ -61,7 +61,7 @@ func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err
 		return nil, err
 	}
 
-	// fmt.Println(arguments, result, kind)
+	// fmt.Printf("%s.%s: arguments=%#v result=%#v kind=%#v\n", namespace, name, arguments, result, kind)
 
 	f = &Function{
 		Namespace:   namespace,
@@ -70,13 +70,15 @@ func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err
 		Result:      result,
 		Description: description.String,
 	}
-	for _, arg := range strings.Split(arguments, ",") {
-		arg = strings.TrimSpace(arg)
-		s := strings.IndexRune(arg, ' ')
-		if s == -1 {
-			return nil, errors.Errorf("Invalid type in argument: %s", arg)
+	if arguments != "" {
+		for _, arg := range strings.Split(arguments, ",") {
+			arg = strings.TrimSpace(arg)
+			s := strings.IndexRune(arg, ' ')
+			if s == -1 {
+				return nil, errors.Errorf("Invalid type in argument: '%s'", arg)
+			}
+			f.Arguments = append(f.Arguments, FunctionArgument{Name: arg[:s], Type: arg[s+1:]})
 		}
-		f.Arguments = append(f.Arguments, FunctionArgument{Name: arg[:s], Type: arg[s+1:]})
 	}
 
 	return f, nil
