@@ -26,5 +26,5 @@ var zeroValuesForType = map[string]string{
 	"uint32":    "0",
 	"uint64":    "0",
 	"time.Time": "time.Time{}",
-	"uuid.UUID": "uuid.Nil",
+	"uu.ID":     "uu.IDNil",
 }

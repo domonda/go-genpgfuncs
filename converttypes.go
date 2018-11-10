@@ -3,8 +3,8 @@ package genpgfuncs
 import (
 	"strings"
 
+	"github.com/domonda/go-types/uu"
 	"github.com/jmoiron/sqlx"
-	uuid "github.com/ungerik/go-uuid"
 )
 
 var pgToGoType = map[string]string{
@@ -31,7 +31,7 @@ var pgToGoType = map[string]string{
 	"json":             "types.JSON",
 	"jsonb":            "types.JSON",
 
-	"uuid": "uuid.UUID",
+	"uuid": "uu.ID",
 }
 
 func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImport, typeMap map[string]string) string {
@@ -83,7 +83,7 @@ func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImpor
 	return t
 }
 
-func UUIDSliceToPgString(ids []uuid.UUID) string {
+func UUIDSliceToPgString(ids []uu.ID) string {
 	if ids == nil {
 		return "NULL"
 	}
