@@ -3,8 +3,9 @@ package genpgfuncs
 import (
 	"strings"
 
-	"github.com/domonda/go-types/uu"
 	"github.com/jmoiron/sqlx"
+
+	"github.com/domonda/go-types/uu"
 )
 
 var pgToGoType = map[string]string{
@@ -28,8 +29,8 @@ var pgToGoType = map[string]string{
 	"timestamp":        "time.Time",
 	"timestamptz":      "time.Time",
 	"bytea":            "[]byte",
-	"json":             "types.JSON",
-	"jsonb":            "types.JSON",
+	"json":             "nullable.JSON",
+	"jsonb":            "nullable.JSON",
 
 	"uuid": "uu.ID",
 }
