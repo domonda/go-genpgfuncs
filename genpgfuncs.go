@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/domonda/errors"
 	"github.com/guregu/null"
 	"github.com/jmoiron/sqlx"
 	fs "github.com/ungerik/go-fs"
@@ -75,7 +74,7 @@ func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err
 			arg = strings.TrimSpace(arg)
 			s := strings.IndexRune(arg, ' ')
 			if s == -1 {
-				return nil, errors.Errorf("invalid type in argument: '%s'", arg)
+				return nil, fmt.Errorf("invalid type in argument: '%s'", arg)
 			}
 			f.Arguments = append(f.Arguments, FunctionArgument{Name: arg[:s], Type: arg[s+1:]})
 		}
