@@ -31,8 +31,7 @@ var pgToGoType = map[string]string{
 	"bytea":            "[]byte",
 	"json":             "nullable.JSON",
 	"jsonb":            "nullable.JSON",
-
-	"uuid": "uu.ID",
+	"uuid":             "uu.ID",
 }
 
 func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImport, typeMap map[string]string) string {
@@ -84,6 +83,7 @@ func PgToGoType(conn *sqlx.DB, t string, imports Imports, enums Enums, typeImpor
 	return t
 }
 
+// TODO: replace with uu.IDSlice
 func UUIDSliceToPgString(ids []uu.ID) string {
 	if ids == nil {
 		return "NULL"

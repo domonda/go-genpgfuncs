@@ -38,8 +38,8 @@ func IntrospectFunction(conn *sqlx.DB, namespace, name string) (f *Function, err
 			pg_catalog.pg_get_function_arguments(p.oid) AS "Arguments",
 			pg_catalog.pg_get_function_result(p.oid) AS "Result",
 			CASE
-				WHEN p.proisagg THEN 'agg'
-				WHEN p.proiswindow THEN 'window'
+				WHEN p.prokind = 'a' THEN 'agg'
+				WHEN p.prokind = 'w' THEN 'window'
 				WHEN p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype THEN 'trigger'
 				ELSE 'normal'
 			END AS "Type",
